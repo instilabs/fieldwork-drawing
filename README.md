@@ -158,6 +158,6 @@ More samples: [decide mode](docs/images/sample_decide.png),
 - `sample-pose.jpg` - breakdance one-hand freeze, photo by
   [Niko Twisty on Pexels](https://www.pexels.com/photo/a-man-breakdancing-on-the-street-13993424/).
   Free to use under the Pexels license; attribution not required.
-- `sample_photos/` and `sample_redraws/` - photos of Sonia Kwek, the live
-  model at the field:work "Drawing with code" session (jo+kapi, 14 Nov
-  2026), and redraw scripts generated from them with `trace --codegen`.
+- `sample_photos/` and `sample_redraws/` - vectorized images based on Sonia Kwek, the
+  live model at the field:work "Drawing with code" session (jo+kapi, 14 Nov
+  2026), and redraw scripts generated from those images with `trace --codegen`.
