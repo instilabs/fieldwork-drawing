@@ -68,9 +68,14 @@ Page formats: `1:1` (1080x1080), `4:5` (1080x1350), `5:4` (1350x1080),
 - `source_size`: the coordinate space of the list. The replay scales it
   uniformly into the current page format and centers it. Omit to use the
   list's own bounding box.
-- Consecutive strokes with identical settings are grouped, so control
-  changes (DOM round trips) happen once per group. Throughput is about
-  700 strokes/sec at `pace_ms: 0` for plain draw strokes. Paint strokes land
+- Consecutive strokes with identical settings are grouped; each group's
+  settings are pushed only where they differ from the previous group,
+  and strokes are dispatched as synthetic pointer events inside the
+  page, one chunk at a time. Measured: a 7,572-stroke replay with
+  per-stroke color/width changes lands in about 18 seconds (the old
+  round-trip-per-change path needed over a minute per 2,000 strokes);
+  well-grouped scanline fills run ~2,200 strokes/sec. The app's own
+  renderer is the floor - it slows as ink accumulates. Paint strokes land
   ~90 stamp shapes each and the app slows as shapes accumulate (tens of
   strokes/sec at first, single digits past a few hundred strokes) - keep
   paint/boids replays small.
