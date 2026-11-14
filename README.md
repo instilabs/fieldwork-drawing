@@ -149,14 +149,15 @@ wifi and it keeps working offline; the driver only needs localhost.
 - `sample-pose.jpg` - free sample photo (Pexels) so trace mode works out of
   the box - see Credits
 
-More samples: [decide mode](docs/images/decide-mode.png),
-[trace mode](docs/images/trace-mode.png),
-[benchmark line pass](docs/images/benchmark-line-pass.png).
+More samples: [decide mode](docs/images/sample_decide.png),
+[trace mode](docs/images/sample_trace.png),
+[benchmark line pass](docs/images/ref_sketch.png).
 
 ## Credits
 
 - `sample-pose.jpg` - breakdance one-hand freeze, photo by
   [Niko Twisty on Pexels](https://www.pexels.com/photo/a-man-breakdancing-on-the-street-13993424/).
   Free to use under the Pexels license; attribution not required.
-- `sample_photos/` and `sample_redraws/` - the model photos are based on
-  Sonia, the live model at a field:work workshop event.
+- `sample_photos/` and `sample_redraws/` - photos of Sonia Kwek, the live
+  model at the field:work "Drawing with code" session (jo+kapi, 14 Nov
+  2026), and redraw scripts generated from them with `trace --codegen`.
