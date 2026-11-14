@@ -7,7 +7,7 @@ made entirely from code, plus the app's own PNG export to prove it.
 
 ```bash
 pip install playwright pillow numpy 'mcp<2'
-python3 -m playwright install chromium
+python3 -m playwright install chromium  # installs the fallback / optional browser
 ```
 
 Note the `'mcp<2'` pin: MCP 2.x renamed `FastMCP` and broke the API this
@@ -20,8 +20,12 @@ API works without it.
 python3 fieldwork_server.py
 ```
 
-A Chromium window opens on https://field-work-drawing.web.app/ and the API
-comes up on `http://127.0.0.1:7766`. Check it:
+Google Chrome opens on https://field-work-drawing.web.app/ by default, in a
+fresh browser context rather than your everyday Chrome profile. If Chrome is
+not installed, the server warns and falls back to Playwright Chromium. Choose
+Chromium explicitly with `python3 fieldwork_server.py --browser chromium`; the
+visible-browser behavior is identical. The API comes up on
+`http://127.0.0.1:7766`. Check it:
 
 ```bash
 curl 127.0.0.1:7766/health
