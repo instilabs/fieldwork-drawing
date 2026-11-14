@@ -57,6 +57,24 @@ Extra live-mode knobs:
 | `--browser` | `chrome` | `chrome` (installed Google Chrome) or `chromium` (bundled) |
 | `--headless` | off | No visible window (testing) |
 
+## Share a redraw script
+
+`--codegen redraw.py` writes a self-contained Python script next to the usual
+outputs. Post the photo, share the script: whoever runs it (with
+`fieldwork_server.py` up) redraws the picture on their own canvas through the
+local API:
+
+```bash
+python3 draw_with_code.py trace --photo pose.jpg --color --codegen redraw_pose.py
+# the other person:
+python3 fieldwork_server.py   # terminal 1
+python3 redraw_pose.py        # terminal 2, redraws via 127.0.0.1:7766/replay
+```
+
+The script is stdlib-only and carries the strokes inside itself (zlib +
+base64). `PACE_MS` at the top controls draw speed; `CLEAR_FIRST = True`
+wipes the canvas first.
+
 ## Knobs
 
 | Flag | Default | Effect |
@@ -66,6 +84,9 @@ Extra live-mode knobs:
 | `--max-strokes` | `9000` | Cap on total strokes |
 | `--density` | `1.0` | Hatching density multiplier |
 | `--shadow-level` | `0.55` | How dark a region must be to get hatching |
+| `--color` | off | Sample the photo's colors per contour stroke instead of gray ink |
+| `--codegen OUT.py` | off | Also write a shareable standalone redraw script |
+| `--pace-ms N` | `0` | Stroke pace baked into the `--codegen` script (~30 looks hand-drawn) |
 | `--seed` | random | Fix for reproducible output |
 | `--strokes PATH` | `<out>.strokes.json` | Custom strokes-file path |
 
