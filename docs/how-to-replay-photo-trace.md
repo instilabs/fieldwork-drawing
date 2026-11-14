@@ -15,7 +15,7 @@ platform.
    replay file:
 
    ```bash
-   python3 draw_with_code.py trace --photo pose.jpg --out pose_sketch.png
+   python3 draw_with_code.py trace --photo sample-pose.jpg --out pose_sketch.png
    # writes pose_sketch.png and pose_sketch.strokes.json
    ```
 
