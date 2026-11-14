@@ -108,6 +108,15 @@ curl -X POST 127.0.0.1:7766/replay -H 'Content-Type: application/json' -d @pose_
 
 Add `"pace_ms": 30` to the replay body to watch it draw at human speed.
 
+Or skip the server entirely: `trace --live` opens the app in a browser window
+and draws the sketch stroke by stroke, like a hand drawing:
+
+```bash
+python3 draw_with_code.py trace --photo pose.jpg --live --speed 20
+# --speed is strokes per second (default 30); --clear wipes the canvas first,
+# --format 4:5 sets the page format, --headless hides the window
+```
+
 Venue wifi tip: the app is a PWA with a service worker. Load it once on good
 wifi and it keeps working offline; the driver only needs localhost.
 
@@ -116,7 +125,8 @@ wifi and it keeps working offline; the driver only needs localhost.
 - `fieldwork_server.py` - browser driver + HTTP API (the core)
 - `fieldwork_mcp.py` - MCP wrapper (13 tools)
 - `draw_with_code.py` - decide (ollaya `/v1/systemone`) + trace (photo to
-  strokes); both also write `.strokes.json` for replay
+  strokes); both also write `.strokes.json` for replay, and trace can draw
+  straight onto the live app with `--live`
 - `replicate.py` - reference-image replication pipeline (the benchmark above)
 - `sample-pose.jpg` - free sample photo (Pexels) so trace mode works out of
   the box - see Credits
