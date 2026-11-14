@@ -75,6 +75,46 @@ The script is stdlib-only and carries the strokes inside itself (zlib +
 base64). `PACE_MS` at the top controls draw speed; `CLEAR_FIRST = True`
 wipes the canvas first.
 
+## Techniques: Paint, Boids, opacity, living presets
+
+The sketch is not stuck as plain pencil. These flags ride along inside the
+stroke file, so they work the same for `curl /replay`, `--live` and
+`--codegen` scripts:
+
+```bash
+# stamp-fill version, translucent, and breathing (the lines keep animating)
+python3 draw_with_code.py trace --photo pose.jpg \
+  --tool paint --paint-shape o --opacity 0.5 --preset breathing --live
+
+# a flock of boids chases the contour paths
+python3 draw_with_code.py trace --photo pose.jpg \
+  --tool boids --boid-preset drizzle --boid-shape dash --live
+```
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--tool paint` | `draw` | Draw each stroke with the app's Paint stamp fill |
+| `--paint-shape S` | app default | Stamp shape: `o`, `x`, `+`, `square`, `diamond` |
+| `--tool boids` | `draw` | Release a boid flock along each stroke path |
+| `--boid-shape S` | app default | Boid shape: `dot`, `arrow`, `chevron`, `dash` |
+| `--boid-preset P` | app default | Flock behavior: `stream`, `drizzle`, `crowd`, `crawl`, `rush`, `scatter` |
+| `--opacity 0.05-1` | `1` | Brush opacity for every stroke |
+| `--preset P` | app default | Living system preset: `held`, `breathing`, `restless`, `wandering`, `nervous`, `melting`, `frozen` - the app keeps animating the drawing afterward |
+
+Notes:
+
+- These affect what the app draws, not the preview PNG (PIL always renders
+  plain ink lines; judge technique results on the app canvas).
+- A living preset is canvas-wide: it animates everything already drawn, not
+  just new strokes. Switch it any time:
+  `curl -X POST 127.0.0.1:7766/preset -d '{"preset": "nervous"}'`
+- **Keep Paint and Boids replays small.** Each paint stroke lands as ~90
+  stamp shapes, and the app slows down sharply as shapes accumulate (measured:
+  ~30 strokes/sec for the first hundred, single digits past a few hundred).
+  Boids are alive and keep simulating after the stroke ends. For a full
+  5,000-stroke sketch stay with the default draw tool; for paint/boids use
+  `--size 320x448 --max-strokes 100` and a low `--density`.
+
 ## Knobs
 
 | Flag | Default | Effect |
