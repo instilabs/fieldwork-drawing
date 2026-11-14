@@ -48,6 +48,7 @@ API summary:
   POST /erase         {points: [[x,y],...], size?}
   POST /replay        {strokes: [...], source_size?: [w,h], clear_first?: bool,
                        pace_ms?: int, max_strokes?: int, width_scale?: float,
+                       paper?: "#rrggbb" (page background, set once first),
                        preset?: "breathing"|... (living preset, set once first)}
   POST /undo          {}          POST /clear {} (clears the whole drawing)
 
@@ -483,11 +484,14 @@ def act_erase(d, points, size=None):
 
 
 def act_replay(d, strokes, source_size=None, clear_first=False, pace_ms=6,
-               max_strokes=None, width_scale=1.0, opacity=None, preset=None):
+               max_strokes=None, width_scale=1.0, opacity=None, preset=None,
+               paper=None):
     def go(d):
         if clear_first and d.page.is_enabled("#clear"):
             d.page.click("#clear")
             d.page.click("#clear-confirm")
+        if paper:
+            d.set_control("paper", paper)
         fmt = d.page.evaluate("() => document.getElementById('format').value")
         pw, ph = FORMATS.get(fmt, (1080, 1350))
         if source_size:
