@@ -88,6 +88,7 @@ drawing in about ten minutes.
 | How-to | [Replay ollaya decide-mode output](docs/how-to-replay-decide-mode.md) | Model-picked strokes on the platform |
 | How-to | [Hook the MCP server to Antigravity, Codex, or Claude Code](docs/how-to-use-mcp.md) | Let an agent draw and see its work |
 | Reference | [HTTP API](docs/reference-http-api.md) | Exact endpoint shapes |
+| Reference | [Features, end to end](docs/reference-features.md) | Every mode, flag, endpoint and caveat in one pass |
 | Reference | [MCP tools](docs/reference-mcp-tools.md) | Exact tool signatures |
 | Explanation | [How the driver works, and its limits](docs/explanation-how-it-works.md) | Why synthetic gestures, honest limits |
 
@@ -100,6 +101,7 @@ python3 fieldwork_server.py
 # terminal 2: generate a stroke list AND replay it onto the real app
 python3 draw_with_code.py decide --mood "seated model, flowing ink, confident" --steps 400
 curl -X POST 127.0.0.1:7766/replay -H 'Content-Type: application/json' -d @drawing.strokes.json
+# (or skip the curl: decide --live draws straight onto the app, stroke by stroke)
 
 # photo of the model -> ink sketch strokes -> real platform
 python3 draw_with_code.py trace --photo sample-pose.jpg --out pose_sketch.png
@@ -142,6 +144,8 @@ wifi and it keeps working offline; the driver only needs localhost.
   flocks and living system presets into the stroke file, and `--style` bundles
   a whole tuned look (six artist styles) behind one flag
 - `replicate.py` - reference-image replication pipeline (the benchmark above)
+- `docs/reference-features.md` - the full feature rundown: every mode,
+  flag, endpoint and caveat in one place
 - `sample-pose.jpg` - free sample photo (Pexels) so trace mode works out of
   the box - see Credits
 
