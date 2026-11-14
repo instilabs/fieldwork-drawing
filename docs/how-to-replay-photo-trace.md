@@ -32,6 +32,31 @@ platform.
    curl -X POST 127.0.0.1:7766/clear -d '{}'
    ```
 
+## Draw it live instead
+
+No server needed: `--live` opens the app in its own browser window and draws
+the sketch stroke by stroke, at a pace you can watch:
+
+```bash
+python3 draw_with_code.py trace --photo pose.jpg --live --speed 20
+```
+
+The preview PNG and `.strokes.json` are still written first. The window stays
+open at the end so you can admire (or export) the result; press Enter in the
+terminal to close it. The drawing is scaled into the app's current page
+format and letterboxed if the aspect ratios differ - pick a matching format
+with `--format` (e.g. `--format 4:5` for a portrait photo).
+
+Extra live-mode knobs:
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--speed N` | `30` | Strokes per second; lower looks more hand-drawn, `0` = flat out |
+| `--format F` | unchanged | Set the app's page format first (`1:1`, `4:5`, `5:4`, `9:16`, `16:9`) |
+| `--clear` | off | Wipe the app canvas before drawing |
+| `--browser` | `chrome` | `chrome` (installed Google Chrome) or `chromium` (bundled) |
+| `--headless` | off | No visible window (testing) |
+
 ## Knobs
 
 | Flag | Default | Effect |
