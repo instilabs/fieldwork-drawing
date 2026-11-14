@@ -107,6 +107,7 @@ seeded random chooser, so the demo never dies. Writes `drawing.png` and
 | `--mood` | seated pose, flowing ink | Prompt steering the picks |
 | `--steps` | 400 | Number of model decisions |
 | `--size WxH` | `1000x1400` | Working resolution |
+| `--format` | none | Letterbox the static output to a canvas aspect (`1:1 4:5 5:4 9:16 16:9`); the sketch scales to fit inside `--size`, nothing is cropped. With `--live` it also sets the app's page format |
 | `--scale` | 1.0 | Stroke length multiplier |
 | `--seed` | time | Reproducible output |
 | `--save-every` | 20 | Redraw the preview every N steps |
@@ -131,7 +132,7 @@ python3 draw_with_code.py decide --steps 200 --live --speed 20
 |---|---|---|
 | `--live` | off | Draw on the live app after generating |
 | `--speed` | 30 | Live draw speed, strokes per second (0 = as fast as the app goes) |
-| `--format` | leave as-is | Set the app's page format first (`1:1 4:5 5:4 9:16 16:9`); in trace it also letterboxes the static export (see trace flags) |
+| `--format` | leave as-is | Letterbox either mode's static export to the requested aspect; with `--live`, set the app's page format too |
 | `--clear` | off | Wipe the canvas before drawing |
 | `--browser` | `chrome` | `chrome` or bundled `chromium` |
 | `--headless` | off | No visible window (for testing) |
