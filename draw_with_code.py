@@ -759,6 +759,31 @@ def run_trace(args):
                                 "opacity": round((args.opacity or 1.0) * 0.45, 3)})
 
     img = img.filter(ImageFilter.GaussianBlur(0.4))
+
+    # --- optional canvas format: letterbox onto a --format aspect canvas.
+    # The static export fits the photo inside --size, so without this the
+    # PNG/strokes keep the photo's aspect and --format only affects --live.
+    if args.format:
+        fw, fh = (int(x) for x in args.format.split(":"))
+        # canvas: the largest fw:fh rectangle that fits inside --size
+        if W / H > fw / fh:
+            ch_, cw_ = H, round(H * fw / fh)
+        else:
+            cw_, ch_ = W, round(W * fh / fw)
+        s = min(cw_ * SS / img.width, ch_ * SS / img.height)
+        dw, dh = max(1, round(img.width * s)), max(1, round(img.height * s))
+        ox, oy = (cw_ * SS - dw) // 2, (ch_ * SS - dh) // 2
+        canvas = Image.new("RGB", (cw_ * SS, ch_ * SS),
+                           args.style_paper or PAPER)
+        canvas.paste(img.resize((dw, dh), Image.LANCZOS), (ox, oy))
+        img = canvas
+        for st in rec.strokes:
+            st["points"] = [[p[0] * s + ox, p[1] * s + oy]
+                            for p in st["points"]]
+            st["width"] = max(0.5, st["width"] * s)
+        sw, sh = cw_, ch_
+        print(f"format: letterboxed to {args.format} ({sw}x{sh})")
+
     img.resize((sw, sh), Image.LANCZOS).save(args.out)
     stamp_technique(rec.strokes, args)
     strokes_path = save_strokes(rec, args.strokes, (sw * SS, sh * SS),
