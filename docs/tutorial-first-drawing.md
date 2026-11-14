@@ -96,10 +96,10 @@ look, and correct.
 ## 5. Draw something real: replay a stroke list (5 min)
 
 Single strokes are for control. Whole drawings are stroke lists. Generate one
-with the bundled tracer on any photo:
+with the bundled tracer on the bundled sample photo (or any of your own):
 
 ```bash
-python draw_with_code.py trace --photo your_photo.jpg --out sketch.png
+python draw_with_code.py trace --photo sample-pose.jpg --out sketch.png
 curl -X POST 127.0.0.1:7766/replay -H 'Content-Type: application/json' \
   -d @sketch.strokes.json
 ```
