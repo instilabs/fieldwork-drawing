@@ -34,12 +34,16 @@ python -m playwright install chromium
 - **Trusted CDP mouse** for single strokes (`/stroke`): real
   `mouse.move/down/up` through Playwright. Highest fidelity, about 30ms per
   stroke.
-- **Batched synthetic PointerEvents** for replays (`/replay`): strokes are
-  dispatched directly at `#live` inside one `page.evaluate` call, 500 per
-  chunk. The app does not check `isTrusted` and it catches
-  `setPointerCapture` failures, so synthetic events are equivalent, and this
-  is roughly 700 strokes/sec, which is what makes multi-thousand-stroke
-  replays practical for live use.
+- **Batched synthetic PointerEvents** for replays (`/replay`): strokes
+  are grouped by their technique settings, then each group's settings
+  diff (only what changed) and its pointer events are applied inside the
+  page, one `page.evaluate` per chunk. The app does not check
+  `isTrusted` and it catches `setPointerCapture` failures, so synthetic
+  events are equivalent. Grouped fills run ~2,200 strokes/sec and even a
+  replay where every stroke changes color and width manages ~400/sec -
+  which is what makes multi-thousand-stroke replays practical for live
+  use. (The previous path paid a browser round trip per control change:
+  ~28 strokes/sec on settings-heavy files.)
 
 ## Coordinates
 
@@ -67,7 +71,8 @@ through the app's normal change handling.
 - **System presets move lines.** New lines default to Held (they stay put).
   Pick Breathing/Restless/etc. in the panel and your marks will drift on
   purpose; the global Strength slider scales it.
-- **Replay speed** tops out around 700 strokes/sec. Use `pace_ms` for drama.
+- **Replay speed** is bounded by the app's own renderer, not the wire:
+  it slows as ink accumulates. Use `pace_ms` for drama.
 - **Screenshots settle 0.4s** so the 15fps canvas paints before capture.
 - **The app is a PWA.** Load it once on good wifi and it keeps working
   offline; the driver itself only needs localhost.
