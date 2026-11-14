@@ -190,10 +190,10 @@ strokes in 5.7 seconds on the real platform.
 Free to use under the Pexels license; attribution not required. Bundled so
 trace mode works out of the box.
 
-`sample_photos/` holds the photos from the field:work "Drawing with code"
-session (jo+kapi, 14 Nov 2026; live model Sonia Kwek), and `sample_redraws/`
-the replayable redraw scripts generated from them with `trace --codegen` -
-see its README for the script-to-photo mapping.
+`sample_photos/` holds vectorized images based on Sonia Kwek, the live model at
+the field:work "Drawing with code" session (jo+kapi, 14 Nov 2026), and
+`sample_redraws/` holds the replayable redraw scripts generated from those
+images with `trace --codegen` - see its README for the image-to-script mapping.
 
 ## Known caveats
 
