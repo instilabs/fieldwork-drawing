@@ -119,6 +119,16 @@ own Chrome window and draws the sketch stroke by stroke (`--speed` is strokes
 per second). The window stays open when it finishes; press Enter in the
 terminal to close it.
 
+Want a different look? `--style` bundles six curated artist styles:
+
+```bash
+python draw_with_code.py trace --photo sample-pose.jpg --style gesture --live
+```
+
+See [Replay a photo trace](how-to-replay-photo-trace.md#styles-curated-artist-presets)
+for the full list (gesture, ink-wash, stipple, blueprint, swarm, field-notes)
+and how they compose with explicit flags.
+
 Undo the last stroke, or wipe the canvas and try again:
 
 ```bash
