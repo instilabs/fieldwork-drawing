@@ -9,6 +9,12 @@ Two modes:
           "It decides, it doesn't generate." Falls back to a seeded random
           chooser if the daemon is not running, so the demo never dies.
 
+          Add --live and decide skips nothing but goes further: after the
+          PNG and strokes file are written, it opens the real field:work
+          app and draws the marks on it, stroke by stroke, at a watchable
+          speed (same --speed/--format/--clear/--browser/--headless family
+          as trace --live).
+
   trace   Photo -> algorithmic ink sketch. Deterministic edge-following
           strokes + shadow hatching. Point it at a photo of the model:
           python3 draw_with_code.py trace --photo model.jpg --out sketch.png
@@ -37,6 +43,7 @@ every mark as {points, color, width}. Replay it onto the real event platform
 
 Examples:
   python3 draw_with_code.py decide --mood "calm seated pose, flowing ink" --steps 400
+  python3 draw_with_code.py decide --steps 200 --live --speed 20
   python3 draw_with_code.py decide --model largha --steps 200 --seed 7
   python3 draw_with_code.py trace --photo pose.jpg --out pose_sketch.png
   python3 draw_with_code.py trace --photo pose.jpg --live --speed 20
@@ -527,6 +534,13 @@ def run_decide(args):
           f"({'ollaya /v1/systemone' if used_api else 'random fallback'}, "
           f"model={args.model}) -> {args.out} + {strokes_path}")
 
+    if args.live:
+        payload = {"source_size": [W * SS, H * SS], "strokes": rec.strokes}
+        draw_strokes_live(
+            payload,
+            speed=args.speed, headless=args.headless, browser=args.browser,
+            format=args.format, clear=args.clear)
+
 
 # -------------------------------------------------------------- mode: trace
 
@@ -796,6 +810,26 @@ def apply_style(args):
     args.length_scale = gen.get("length_scale", 1.0)
 
 
+def add_live_args(p, live_help):
+    """The --live flag family shared by decide and trace: draw the strokes
+    on the live app, at a watchable pace, through the same code path."""
+    p.add_argument("--live", action="store_true", help=live_help)
+    p.add_argument("--speed", type=float, default=30.0,
+                   help="live draw speed in strokes per second (default 30; "
+                        "lower looks more hand-drawn, 0 = as fast as the app goes)")
+    p.add_argument("--format", choices=APP_FORMATS, default=None,
+                   help="set the app's page format before drawing live "
+                        "(default: leave it as it is; the replay letterboxes "
+                        "into whatever format is showing)")
+    p.add_argument("--clear", action="store_true",
+                   help="clear the app canvas before drawing live")
+    p.add_argument("--browser", choices=("chrome", "chromium"), default="chrome",
+                   help="browser for --live (default: installed Google Chrome, "
+                        "falling back to bundled Chromium)")
+    p.add_argument("--headless", action="store_true",
+                   help="--live without a visible window (for testing)")
+
+
 def parse_size(s):
     w, h = s.lower().split("x")
     return int(w), int(h)
@@ -820,6 +854,8 @@ def main():
     d.add_argument("--out", default="drawing.png")
     d.add_argument("--strokes", default=None,
                    help="stroke-list JSON for replay (default: <out>.strokes.json)")
+    add_live_args(d, "after deciding, draw the marks on the live app "
+                     "(field-work-drawing.web.app) in a browser window")
     d.set_defaults(fn=run_decide)
 
     t = sub.add_parser("trace", help="photo -> algorithmic ink sketch")
@@ -847,23 +883,8 @@ def main():
     t.add_argument("--seed", type=int, default=None)
     t.add_argument("--strokes", default=None,
                    help="stroke-list JSON for replay (default: <out>.strokes.json)")
-    t.add_argument("--live", action="store_true",
-                   help="after tracing, draw the sketch on the live app "
-                        "(field-work-drawing.web.app) in a browser window")
-    t.add_argument("--speed", type=float, default=30.0,
-                   help="live draw speed in strokes per second (default 30; "
-                        "lower looks more hand-drawn, 0 = as fast as the app goes)")
-    t.add_argument("--format", choices=APP_FORMATS, default=None,
-                   help="set the app's page format before drawing live "
-                        "(default: leave it as it is; the replay letterboxes "
-                        "into whatever format is showing)")
-    t.add_argument("--clear", action="store_true",
-                   help="clear the app canvas before drawing live")
-    t.add_argument("--browser", choices=("chrome", "chromium"), default="chrome",
-                   help="browser for --live (default: installed Google Chrome, "
-                        "falling back to bundled Chromium)")
-    t.add_argument("--headless", action="store_true",
-                   help="--live without a visible window (for testing)")
+    add_live_args(t, "after tracing, draw the sketch on the live app "
+                     "(field-work-drawing.web.app) in a browser window")
     t.add_argument("--color", action="store_true",
                    help="sample the photo's colors per stroke instead of "
                         "grayscale ink")
