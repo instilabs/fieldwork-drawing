@@ -40,6 +40,23 @@ writes a `.strokes.json` file you can replay onto the real platform.
 | `--scale` | `1.0` | Stroke length multiplier |
 | `--save-every` | `20` | Redraw the preview every N steps |
 | `--seed` | random | Fix for reproducible output |
+| `--live` | off | Draw the marks on the live app after rendering (with `--speed`, `--format`, `--clear`, `--browser`, `--headless` - same family as trace `--live`) |
+
+## Draw it live instead
+
+Skip the curl: `--live` opens the app and draws the marks stroke by
+stroke, at a watchable pace:
+
+```bash
+python3 draw_with_code.py decide \
+  --mood "seated model, flowing ink, confident" --steps 400 \
+  --live --speed 20 --clear
+```
+
+`--speed` is strokes per second (default 30; 0 = as fast as the app
+goes), `--format` sets the page format first, `--clear` wipes the canvas
+first, `--browser chromium` picks the bundled browser, `--headless`
+hides the window.
 
 ## Tips
 
