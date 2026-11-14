@@ -40,8 +40,14 @@ Examples:
   python3 draw_with_code.py decide --model largha --steps 200 --seed 7
   python3 draw_with_code.py trace --photo pose.jpg --out pose_sketch.png
   python3 draw_with_code.py trace --photo pose.jpg --live --speed 20
+  python3 draw_with_code.py trace --photo pose.jpg --style ink-wash --live
   python3 draw_with_code.py trace --photo pose.jpg --tool paint --paint-shape o \
       --opacity 0.5 --preset breathing --live
+
+  trace --style bundles six curated artist styles (gesture, ink-wash, stipple,
+  blueprint, swarm, field-notes). A style sets tool/preset/opacity/ink/paper
+  and generation knobs to a tuned look; explicit flags override the bundle,
+  and --color overrides its ink.
 """
 
 import argparse
@@ -70,6 +76,89 @@ PALETTE = {
     "plum": (122, 74, 99),
 }
 PAPER = (250, 248, 245)
+
+
+# ---------------------------------------------------------------- styles ---
+
+# Curated artist-style presets for trace --style. Each style is a bundle of
+# the existing knobs (tool/shape/preset/opacity/ink/paper + stroke-generation
+# parameters) tuned to a look. Explicit flags always win over the style's
+# bundle, and --color overrides the style's ink.
+#
+# Performance: the app slows superlinearly past a few hundred Paint stamps,
+# and Boids keep simulating after the stroke ends, so the paint/boids styles
+# (stipple, swarm) cap their stroke counts low. Raise them with explicit
+# --max-strokes only if you enjoy slideshows.
+STYLES = {
+    "gesture": {
+        "blurb": "few bold strokes, big brush, nervous preset - a 2-minute "
+                 "live-model sketch",
+        "preset": "nervous",
+        "opacity": 1.0,
+        "ink": "#1a1a1a",
+        "paper": "#faf8f5",
+        "width_scale": 4.5,
+        "gen": {"edge_pct": 4.0, "max_strokes": 400, "density": 0.2,
+                "shadow_level": 0.45, "length_scale": 2.5},
+    },
+    "ink-wash": {
+        "blurb": "soft grays, low-opacity layered strokes, breathing preset - "
+                 "moody, good for portraits",
+        "preset": "breathing",
+        "opacity": 0.45,
+        "width_scale": 1.5,
+        "paper": "#faf8f5",
+        "gen": {"edge_pct": 5.0, "max_strokes": 2500, "density": 0.5,
+                "shadow_level": 0.55},
+    },
+    "stipple": {
+        "blurb": "dots with density mapped to shading - pointillism. Uses "
+                 "single-point draw strokes: a one-tap Paint gesture sprays "
+                 "dozens of stamps, so Paint is the wrong tool for dots",
+        "tool": "draw", "opacity": 0.9,
+        "ink": "#26221e",
+        "paper": "#faf8f5",
+        "gen": {"mode": "stipple", "max_strokes": 4000},
+    },
+    "blueprint": {
+        "blurb": "white ink on dark blue paper, ruler-straight, frozen preset "
+                 "- technical drawing",
+        "preset": "frozen",
+        "opacity": 1.0,
+        "ink": "#f2f6ff",
+        "paper": "#1d3a6e",
+        "width_scale": 1.1,
+        "gen": {"edge_pct": 4.0, "max_strokes": 2200, "density": 0.35,
+                "shadow_level": 0.5, "jitter": 0.1},
+    },
+    "swarm": {
+        "blurb": "the sketch drawn by a boid flock, wandering preset - "
+                 "chaotic but alive; demo showpiece",
+        "tool": "boids", "boid_preset": "stream", "boid_shape": "dot",
+        "preset": "wandering",
+        "opacity": 1.0,
+        "ink": "#1a1a1a",
+        "paper": "#faf8f5",
+        "width_scale": 3.0,
+        "gen": {"edge_pct": 2.5, "max_strokes": 400, "density": 0.45,
+                "hatch": False, "length_scale": 2.0},
+    },
+    "field-notes": {
+        "blurb": "sepia ink, slightly restless, sketchy double-lines - "
+                 "Da Vinci notebook energy",
+        "preset": "restless",
+        "opacity": 0.85,
+        "ink": "#6b4423",
+        "paper": "#faf8f5",
+        "double_line": True,
+        "gen": {"edge_pct": 5.0, "max_strokes": 1500, "density": 0.3,
+                "shadow_level": 0.5},
+    },
+}
+
+
+def hex_rgb(h):
+    return tuple(int(h[i:i + 2], 16) for i in (1, 3, 5))
 
 
 # ------------------------------------------------------- stroke recording ---
@@ -132,10 +221,12 @@ class TeeDraw:
         self.rec.ellipse(*a, **k)
 
 
-def save_strokes(rec, path, size, preset=None):
+def save_strokes(rec, path, size, preset=None, paper=None):
     payload = {"source_size": list(size), "strokes": rec.strokes}
     if preset:
         payload["preset"] = preset
+    if paper:
+        payload["paper"] = paper
     with open(path, "w") as f:
         json.dump(payload, f)
     return path
@@ -143,20 +234,21 @@ def save_strokes(rec, path, size, preset=None):
 
 def stamp_technique(strokes, args):
     """Bake --tool/--opacity/--shape choices into every stroke so replays
-    (HTTP /replay, --live, --codegen scripts) draw with them. The preview
-    PNG is unaffected: PIL always renders plain ink lines."""
+    (HTTP /replay, --live, --codegen scripts) draw with them. Keys a stroke
+    already carries (e.g. a style's hand-tuned echo strokes) are kept. The
+    preview PNG is unaffected: PIL always renders plain ink lines."""
     for s in strokes:
         if args.tool != "draw":
-            s["tool"] = args.tool
+            s.setdefault("tool", args.tool)
         if args.opacity is not None:
-            s["opacity"] = round(args.opacity, 3)
+            s.setdefault("opacity", round(args.opacity, 3))
         if args.tool == "paint" and args.paint_shape:
-            s["shape"] = args.paint_shape
+            s.setdefault("shape", args.paint_shape)
         if args.tool == "boids":
             if args.boid_shape:
-                s["shape"] = args.boid_shape
+                s.setdefault("shape", args.boid_shape)
             if args.boid_preset:
-                s["boid_preset"] = args.boid_preset
+                s.setdefault("boid_preset", args.boid_preset)
 
 
 # ------------------------------------------------------------- live draw ---
@@ -188,6 +280,7 @@ def draw_strokes_live(payload, speed=30.0, headless=False, browser="chrome",
         if format:
             act_format(d, format)
         strokes = payload["strokes"]
+        paper = payload.get("paper")
         pace_ms = max(0, int(round(1000.0 / speed))) if speed > 0 else 0
         chunk = max(1, int(round(speed)))  # ~1s of drawing per replay call
         total = len(strokes)
@@ -197,7 +290,8 @@ def draw_strokes_live(payload, speed=30.0, headless=False, browser="chrome",
         for i in range(0, total, chunk):
             r = act_replay(d, strokes[i:i + chunk],
                            source_size=payload.get("source_size"),
-                           clear_first=clear and i == 0, pace_ms=pace_ms)
+                           clear_first=clear and i == 0, pace_ms=pace_ms,
+                           paper=paper if i == 0 else None)
             done += r["replayed"]
             print(f"  live: {done}/{total} strokes", flush=True)
             if on_chunk:
@@ -491,10 +585,13 @@ if __name__ == "__main__":
 '''
 
 
-def write_codegen(path, name, strokes, size, pace_ms=0, preset=None):
+def write_codegen(path, name, strokes, size, pace_ms=0, preset=None,
+                  paper=None):
     body = {"source_size": list(size), "strokes": strokes}
     if preset:
         body["preset"] = preset
+    if paper:
+        body["paper"] = paper
     payload = json.dumps(body, separators=(",", ":"))
     blob = base64.b64encode(zlib.compress(payload.encode(), 9)).decode()
     script = CODEGEN_TEMPLATE.format(
@@ -519,14 +616,18 @@ def run_trace(args):
     mag = np.hypot(gx, gy)
 
     SS = 2
-    img = Image.new("RGB", (sw * SS, sh * SS), PAPER)
+    style_ink = hex_rgb(args.style_ink) if args.style_ink else None
+    jt = args.jitter
+    ws = args.width_scale
+    img = Image.new("RGB", (sw * SS, sh * SS), args.style_paper or PAPER)
     rec = Recorder()
     draw = TeeDraw(ImageDraw.Draw(img), rec)
 
     # --- pass 1: strokes along strong edges (contours)
     threshold = max(np.percentile(mag, 100 - args.edge_pct), 0.06)
     ys, xs = np.where(mag > threshold)
-    order = np.argsort(-mag[ys, xs])  # strongest edges first
+    order = (np.argsort(-mag[ys, xs]) if args.gen_mode == "sketch"
+             else [])  # strongest edges first
     max_contour = int(args.max_strokes * args.density)
     # min-distance claiming: an edge band yields one row of strokes, not a fill
     claimed = np.zeros((sh, sw), dtype=bool)
@@ -545,14 +646,16 @@ def run_trace(args):
         # edge direction is perpendicular to the gradient
         ang = math.atan2(gy[y, x], gx[y, x]) + math.pi / 2
         strength = min(mag[y, x] / (mag.max() + 1e-9), 1.0)
-        ln = (6 + 18 * strength) * SS
-        wid = max(1, int((1 + 2 * strength) * SS * 0.8))
-        jx, jy = rng.uniform(-1.5, 1.5) * SS, rng.uniform(-1.5, 1.5) * SS
+        ln = (6 + 18 * strength) * SS * args.length_scale
+        wid = max(1, int((1 + 2 * strength) * SS * 0.8 * ws))
+        jx, jy = rng.uniform(-1.5, 1.5) * SS * jt, rng.uniform(-1.5, 1.5) * SS * jt
         cx, cy = x * SS + jx, y * SS + jy
         dx, dy = math.cos(ang) * ln / 2, math.sin(ang) * ln / 2
         if color_arr is not None:
             r, g, b = (int(c) for c in color_arr[y, x])
             ink = (r, g, b)
+        elif style_ink is not None:
+            ink = style_ink
         else:
             shade = int(40 + 120 * (1 - strength))
             ink = (shade, shade, shade)
@@ -561,7 +664,7 @@ def run_trace(args):
 
     # --- pass 2: hatching in dark areas (shadow)
     cell = 9
-    dark = gray < args.shadow_level
+    dark = (gray < args.shadow_level) & (args.gen_mode == "sketch") & args.hatch
     for cy in range(0, sh - cell, cell):
         for cx in range(0, sw - cell, cell):
             block = gray[cy:cy + cell, cx:cx + cell]
@@ -574,30 +677,93 @@ def run_trace(args):
                 px = (cx + rng.uniform(1, cell - 1)) * SS
                 py = (cy + rng.uniform(1, cell - 1)) * SS
                 ln = cell * 0.7 * SS
-                a = base_ang + rng.uniform(-0.15, 0.15)
+                a = base_ang + rng.uniform(-0.15, 0.15) * jt
                 dx, dy = math.cos(a) * ln / 2, math.sin(a) * ln / 2
-                shade = int(90 + 90 * (1 - darkness))
+                if style_ink is not None:
+                    ink = style_ink
+                else:
+                    shade = int(90 + 90 * (1 - darkness))
+                    ink = (shade, shade, shade)
                 draw.line([px - dx, py - dy, px + dx, py + dy],
-                          fill=(shade, shade, shade), width=SS)
+                          fill=ink, width=max(1, int(SS * ws)))
+
+    # --- stipple mode: dots instead of lines, density mapped to shading.
+    # Only cells clearly darker than mid-gray contribute (a low threshold
+    # floods the picture with uniform noise dots, drowning the figure), and
+    # the stroke cap is spread over the whole picture via a first measuring
+    # pass instead of being spent on the top rows. Each dot is a 1px micro
+    # line, not a tap: down+up at one point double-registers on the app.
+    if args.gen_mode == "stipple":
+        ink = style_ink or (38, 34, 30)
+        cell = 6
+        cells = []
+        total = 0.0
+        for cy in range(0, sh - cell, cell):
+            for cx in range(0, sw - cell, cell):
+                darkness = 1 - gray[cy:cy + cell, cx:cx + cell].mean()
+                if darkness < 0.3:
+                    continue
+                e = ((darkness - 0.3) / 0.7) ** 2.0 * 3 * args.density
+                cells.append((cx, cy, darkness, e))
+                total += e
+        k = min(1.0, args.max_strokes / total) if total > 0 else 1.0
+        for cx, cy, darkness, e in cells:
+            if placed >= args.max_strokes:
+                break
+            if e < 0.25:  # too faint to matter, whatever the cap allows
+                continue
+            expected = e * k
+            n = int(expected)
+            if rng.random() < expected - n:
+                n += 1
+            for _ in range(min(n, args.max_strokes - placed)):
+                px = (cx + rng.uniform(0.5, cell - 0.5)) * SS
+                py = (cy + rng.uniform(0.5, cell - 0.5)) * SS
+                r = (1.5 + 2.5 * darkness) * SS
+                draw.line([px, py, px + 1.2, py], fill=ink,
+                          width=max(2, int(2 * r)))
+                placed += 1
+
+    # --- style post-pass: sketchy double-lines (a lighter offset echo of
+    # every stroke, replayed as one group after the main strokes)
+    if args.double_line:
+        base = list(rec.strokes)
+        pil = ImageDraw.Draw(img)
+        for s in base:
+            pts = [[p[0] + 2.5 * SS + rng.uniform(-1, 1),
+                    p[1] + 2.0 * SS + rng.uniform(-1, 1)] for p in s["points"]]
+            col = hex_rgb(s["color"])
+            w = max(1, int(round(s["width"] * 0.7)))
+            if len(pts) > 1:
+                pil.line([c for p in pts for c in p], fill=col, width=w)
+            else:
+                r = max(1, w // 2)
+                pil.ellipse([pts[0][0] - r, pts[0][1] - r,
+                             pts[0][0] + r, pts[0][1] + r], fill=col)
+            rec.strokes.append({"points": pts, "color": s["color"],
+                                "width": float(w),
+                                "opacity": round((args.opacity or 1.0) * 0.45, 3)})
 
     img = img.filter(ImageFilter.GaussianBlur(0.4))
     img.resize((sw, sh), Image.LANCZOS).save(args.out)
     stamp_technique(rec.strokes, args)
     strokes_path = save_strokes(rec, args.strokes, (sw * SS, sh * SS),
-                                preset=args.preset)
+                                preset=args.preset, paper=args.style_paper)
     print(f"done: traced {args.photo} -> {args.out} + {strokes_path} "
           f"({placed} contour strokes + hatching, {len(rec.strokes)} total)")
 
     if args.codegen:
         cg = write_codegen(args.codegen, args.photo, rec.strokes,
                            (sw * SS, sh * SS), pace_ms=args.pace_ms,
-                           preset=args.preset)
+                           preset=args.preset, paper=args.style_paper)
         print(f"codegen: {cg} (share this file; it redraws via the local API)")
 
     if args.live:
         payload = {"source_size": [sw * SS, sh * SS], "strokes": rec.strokes}
         if args.preset:
             payload["preset"] = args.preset
+        if args.style_paper:
+            payload["paper"] = args.style_paper
         draw_strokes_live(
             payload,
             speed=args.speed, headless=args.headless, browser=args.browser,
@@ -605,6 +771,30 @@ def run_trace(args):
 
 
 # ------------------------------------------------------------------- cli ---
+
+def apply_style(args):
+    """Resolve trace options: explicit flag > --style bundle > built-in
+    default. Runs after parsing, before validation."""
+    style = STYLES.get(args.style) or {}
+    gen = style.get("gen", {})
+    for name, default in (("edge_pct", 6.0), ("max_strokes", 9000),
+                          ("density", 1.0), ("shadow_level", 0.55)):
+        if getattr(args, name) is None:
+            setattr(args, name, gen.get(name, default))
+    for name, default in (("tool", "draw"), ("paint_shape", None),
+                          ("boid_shape", None), ("boid_preset", None),
+                          ("opacity", None), ("preset", None)):
+        if getattr(args, name) is None:
+            setattr(args, name, style.get(name, default))
+    args.style_ink = None if args.color else style.get("ink")
+    args.style_paper = style.get("paper")
+    args.width_scale = style.get("width_scale", 1.0)
+    args.double_line = style.get("double_line", False)
+    args.gen_mode = gen.get("mode", "sketch")
+    args.jitter = gen.get("jitter", 1.0)
+    args.hatch = gen.get("hatch", True)
+    args.length_scale = gen.get("length_scale", 1.0)
+
 
 def parse_size(s):
     w, h = s.lower().split("x")
@@ -636,13 +826,24 @@ def main():
     t.add_argument("--photo", required=True)
     t.add_argument("--out", default="sketch.png")
     t.add_argument("--size", type=parse_size, default="1000x1400")
-    t.add_argument("--edge-pct", type=float, default=6.0,
-                   help="percent of pixels treated as contour (2-12)")
-    t.add_argument("--max-strokes", type=int, default=9000,
-                   help="cap on contour strokes")
-    t.add_argument("--density", type=float, default=1.0, help="stroke density multiplier")
-    t.add_argument("--shadow-level", type=float, default=0.55,
-                   help="gray level below which hatching appears (0-1)")
+    t.add_argument("--style", choices=list(STYLES), default=None,
+                   help="curated artist-style preset bundle: gesture, "
+                        "ink-wash, stipple, blueprint, swarm, field-notes. "
+                        "Sets tool/preset/opacity/ink and generation knobs "
+                        "to a tuned look; explicit flags override the bundle, "
+                        "and --color overrides its ink")
+    t.add_argument("--edge-pct", type=float, default=None,
+                   help="percent of pixels treated as contour (2-12; "
+                        "default 6.0, or the style's)")
+    t.add_argument("--max-strokes", type=int, default=None,
+                   help="cap on contour strokes (default 9000, or the "
+                        "style's cap)")
+    t.add_argument("--density", type=float, default=None,
+                   help="stroke density multiplier (default 1.0, or the "
+                        "style's)")
+    t.add_argument("--shadow-level", type=float, default=None,
+                   help="gray level below which hatching appears (0-1; "
+                        "default 0.55, or the style's)")
     t.add_argument("--seed", type=int, default=None)
     t.add_argument("--strokes", default=None,
                    help="stroke-list JSON for replay (default: <out>.strokes.json)")
@@ -666,10 +867,10 @@ def main():
     t.add_argument("--color", action="store_true",
                    help="sample the photo's colors per stroke instead of "
                         "grayscale ink")
-    t.add_argument("--tool", choices=("draw", "paint", "boids"), default="draw",
+    t.add_argument("--tool", choices=("draw", "paint", "boids"), default=None,
                    help="platform tool the strokes replay with: paint (stamp "
                         "fill) or boids (flock). Affects the app replay, not "
-                        "the preview PNG")
+                        "the preview PNG (default draw, or the style's)")
     t.add_argument("--paint-shape", choices=("o", "x", "+", "square", "diamond"),
                    default=None, help="stamp shape for --tool paint")
     t.add_argument("--boid-shape", choices=("dot", "arrow", "chevron", "dash"),
@@ -698,6 +899,7 @@ def main():
 
     args = ap.parse_args()
     if args.mode == "trace":
+        apply_style(args)
         if args.paint_shape and args.tool != "paint":
             ap.error("--paint-shape needs --tool paint")
         if (args.boid_shape or args.boid_preset) and args.tool != "boids":
