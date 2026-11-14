@@ -115,6 +115,13 @@ and draws the sketch stroke by stroke, like a hand drawing:
 python3 draw_with_code.py trace --photo pose.jpg --live --speed 20
 # --speed is strokes per second (default 30); --clear wipes the canvas first,
 # --format 4:5 sets the page format, --headless hides the window
+
+# and the sketch is not stuck as pencil: use the platform's own tools and
+# living presets (they ride along in the stroke file and --codegen scripts)
+python3 draw_with_code.py trace --photo pose.jpg \
+  --tool paint --paint-shape o --opacity 0.5 --preset breathing --live
+python3 draw_with_code.py trace --photo pose.jpg \
+  --tool boids --boid-preset drizzle --live
 ```
 
 Venue wifi tip: the app is a PWA with a service worker. Load it once on good
@@ -126,7 +133,9 @@ wifi and it keeps working offline; the driver only needs localhost.
 - `fieldwork_mcp.py` - MCP wrapper (13 tools)
 - `draw_with_code.py` - decide (ollaya `/v1/systemone`) + trace (photo to
   strokes); both also write `.strokes.json` for replay, and trace can draw
-  straight onto the live app with `--live`
+  straight onto the live app with `--live`. `--tool paint|boids`, `--opacity`
+  and `--preset breathing|nervous|...` put the platform's Paint stamps, Boids
+  flocks and living system presets into the stroke file
 - `replicate.py` - reference-image replication pipeline (the benchmark above)
 - `sample-pose.jpg` - free sample photo (Pexels) so trace mode works out of
   the box - see Credits
