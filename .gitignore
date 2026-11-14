@@ -1,0 +1,13 @@
+__pycache__/
+.venv/
+venv/
+.DS_Store
+
+# run outputs
+drawing.png
+sketch.png
+pose_sketch.png
+canvas.png
+export.png
+*.strokes.json
+!examples/*.strokes.json
