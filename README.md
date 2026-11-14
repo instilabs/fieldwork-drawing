@@ -1,7 +1,6 @@
 # fieldwork-drawing
 
-Draw with code on the real [field:work](https://field-work-drawing.web.app/)
-event platform.
+Draw with code on the real [field:work](https://field-work-drawing.web.app/) event platform.
 
 A Playwright driver plays the app's canvas like an instrument: strokes go in
 as genuine pointer gestures, so everything the platform does for a human (the
@@ -23,12 +22,47 @@ PNG export). 3,812 strokes in 5.7 seconds.*
 
 ## Quick start
 
-```bash
-pip install playwright pillow numpy 'mcp<2'
-python3 -m playwright install chromium  # bundled fallback / optional choice
+Create a project `.venv` and install the dependencies. **Option A (recommended): uv**
 
-python3 fieldwork_server.py             # Chrome by default; API on 127.0.0.1:7766
-python3 fieldwork_server.py --browser chromium  # explicitly use bundled Chromium
+```bash
+uv venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
+```
+
+`uv` works without system Python. If it cannot find an interpreter, it downloads
+a standalone Python into its managed data directory (by default,
+`~/.local/share/uv/python`). This does not replace system Python or add Python
+to your `PATH`. To use a conda interpreter instead, activate that conda
+environment first, then create the project venv with:
+
+```bash
+uv venv --python "$(which python)"
+```
+
+After installing, run without activating `.venv` with
+`uv run --no-project python fieldwork_server.py` from the repo root.
+
+**Option B: classic `venv` and `pip`**
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+With either option, install the bundled Chromium fallback from the active
+`.venv` if you need it:
+
+```bash
+python -m playwright install chromium
+```
+
+Start the driver from the repo root with `.venv` active:
+
+```bash
+python fieldwork_server.py             # Chrome by default; API on 127.0.0.1:7766
+python fieldwork_server.py --browser chromium  # explicitly use bundled Chromium
 ```
 
 Draw a line from any code:
@@ -82,9 +116,9 @@ wifi and it keeps working offline; the driver only needs localhost.
 - `fieldwork_server.py` - browser driver + HTTP API (the core)
 - `fieldwork_mcp.py` - MCP wrapper (13 tools)
 - `draw_with_code.py` - decide (ollaya `/v1/systemone`) + trace (photo to
-  strokes); both also write `<out>.strokes.json` for replay
+  strokes); both also write `.strokes.json` for replay
 - `replicate.py` - reference-image replication pipeline (the benchmark above)
 
-More samples: [decide mode](docs/images/sample_decide.png),
-[trace mode](docs/images/sample_trace.png),
-[benchmark line pass](docs/images/ref_sketch.png).
+More samples: [decide mode](docs/images/decide-mode.png),
+[trace mode](docs/images/trace-mode.png),
+[benchmark line pass](docs/images/benchmark-line-pass.png).
