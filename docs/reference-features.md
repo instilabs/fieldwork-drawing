@@ -47,6 +47,7 @@ hatching; `--seed` fixes the jitter.
 | `--photo` | (required) | Source photo |
 | `--out` | `sketch.png` | Preview PNG |
 | `--size WxH` | `1000x1400` | Working resolution |
+| `--format` | none | Letterbox the export to a canvas aspect (`1:1 4:5 5:4 9:16 16:9`); the sketch scales to fit inside `--size`, nothing is cropped. With `--live` it also sets the app's page format |
 | `--style` | none | One of the six artist styles below |
 | `--edge-pct` | 6.0 | Percent of pixels treated as contour (2-12) |
 | `--max-strokes` | 9000 | Cap on contour strokes |
@@ -130,7 +131,7 @@ python3 draw_with_code.py decide --steps 200 --live --speed 20
 |---|---|---|
 | `--live` | off | Draw on the live app after generating |
 | `--speed` | 30 | Live draw speed, strokes per second (0 = as fast as the app goes) |
-| `--format` | leave as-is | Set the app's page format first (`1:1 4:5 5:4 9:16 16:9`) |
+| `--format` | leave as-is | Set the app's page format first (`1:1 4:5 5:4 9:16 16:9`); in trace it also letterboxes the static export (see trace flags) |
 | `--clear` | off | Wipe the canvas before drawing |
 | `--browser` | `chrome` | `chrome` or bundled `chromium` |
 | `--headless` | off | No visible window (for testing) |
