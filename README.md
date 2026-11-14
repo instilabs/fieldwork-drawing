@@ -102,7 +102,7 @@ python3 draw_with_code.py decide --mood "seated model, flowing ink, confident" -
 curl -X POST 127.0.0.1:7766/replay -H 'Content-Type: application/json' -d @drawing.strokes.json
 
 # photo of the model -> ink sketch strokes -> real platform
-python3 draw_with_code.py trace --photo pose.jpg --out pose_sketch.png
+python3 draw_with_code.py trace --photo sample-pose.jpg --out pose_sketch.png
 curl -X POST 127.0.0.1:7766/replay -H 'Content-Type: application/json' -d @pose_sketch.strokes.json
 ```
 
@@ -118,7 +118,15 @@ wifi and it keeps working offline; the driver only needs localhost.
 - `draw_with_code.py` - decide (ollaya `/v1/systemone`) + trace (photo to
   strokes); both also write `.strokes.json` for replay
 - `replicate.py` - reference-image replication pipeline (the benchmark above)
+- `sample-pose.jpg` - free sample photo (Pexels) so trace mode works out of
+  the box - see Credits
 
 More samples: [decide mode](docs/images/decide-mode.png),
 [trace mode](docs/images/trace-mode.png),
 [benchmark line pass](docs/images/benchmark-line-pass.png).
+
+## Credits
+
+- `sample-pose.jpg` - breakdance one-hand freeze, photo by
+  [Niko Twisty on Pexels](https://www.pexels.com/photo/a-man-breakdancing-on-the-street-13993424/).
+  Free to use under the Pexels license; attribution not required.
