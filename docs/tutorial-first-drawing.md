@@ -108,6 +108,17 @@ curl -X POST 127.0.0.1:7766/replay -H 'Content-Type: application/json' \
 format and executes every stroke as a gesture: about 700 strokes/sec flat
 out, or add `"pace_ms": 30` to the body to watch it draw at human speed.
 
+Prefer to skip the server? Trace can drive the app directly:
+
+```bash
+python draw_with_code.py trace --photo your_photo.jpg --live --speed 20
+```
+
+`--live` writes the PNG and strokes file as usual, then opens the app in its
+own Chrome window and draws the sketch stroke by stroke (`--speed` is strokes
+per second). The window stays open when it finishes; press Enter in the
+terminal to close it.
+
 Undo the last stroke, or wipe the canvas and try again:
 
 ```bash
