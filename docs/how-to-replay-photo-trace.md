@@ -75,6 +75,43 @@ The script is stdlib-only and carries the strokes inside itself (zlib +
 base64). `PACE_MS` at the top controls draw speed; `CLEAR_FIRST = True`
 wipes the canvas first.
 
+## Styles: curated artist presets
+
+`--style` bundles a whole look behind one flag. Each style is a tuned
+combination of the technique flags above plus stroke-generation knobs
+(edge threshold, density, stroke width, paper):
+
+```bash
+python3 draw_with_code.py trace --photo pose.jpg --style ink-wash --live
+```
+
+| Style | Look | Bundle |
+|---|---|---|
+| `gesture` | Few bold strokes, big brush - a 2-minute live-model sketch | nervous preset, heavy width, ~80 strokes |
+| `ink-wash` | Soft grays, low-opacity layered strokes - moody, good for portraits | breathing preset, opacity 0.45, wide soft strokes |
+| `stipple` | Dots with density mapped to shading - pointillism | dot micro-strokes, capped at 4,000 |
+| `blueprint` | White ink on dark blue paper, ruler-straight - technical drawing | frozen preset, paper `#1d3a6e`, near-zero jitter |
+| `swarm` | The sketch drawn by a boid flock - chaotic but alive; demo showpiece | boids `stream`, wandering preset, capped at 180 paths |
+| `field-notes` | Sepia ink, slightly restless, sketchy double-lines - Da Vinci notebook | restless preset, sepia `#6b4423`, offset echo strokes |
+
+Styles compose with explicit flags: an explicit `--tool`, `--opacity`,
+`--preset`, `--density`, `--max-strokes`, ... overrides the style's bundle,
+and `--color` overrides the style's ink:
+
+```bash
+# blueprint look, but in red ink
+python3 draw_with_code.py trace --photo pose.jpg --style blueprint --color --live
+# gesture look, but translucent
+python3 draw_with_code.py trace --photo pose.jpg --style gesture --opacity 0.5 --live
+```
+
+Performance caps: the app slows superlinearly past a few hundred Paint
+stamps, and Boids keep simulating after the stroke ends, so `stipple` caps
+at 4,000 dot strokes and `swarm` at 180 flock paths. Raise them with an
+explicit `--max-strokes` only if you enjoy slideshows. (Stipple uses plain
+draw dots rather than Paint stamps on purpose: a one-tap Paint gesture
+sprays dozens of stamps, flooding the canvas within a few strokes.)
+
 ## Techniques: Paint, Boids, opacity, living presets
 
 The sketch is not stuck as plain pencil. These flags ride along inside the
