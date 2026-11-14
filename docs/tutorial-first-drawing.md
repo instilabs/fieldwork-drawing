@@ -5,9 +5,39 @@ made entirely from code, plus the app's own PNG export to prove it.
 
 ## 1. Install (2 min)
 
+From the repo root, choose one option to create `.venv` and install the dependencies.
+
+**Option A (recommended): uv**
+
 ```bash
-pip install playwright pillow numpy 'mcp<2'
-python3 -m playwright install chromium  # installs the fallback / optional browser
+uv venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
+```
+
+`uv` does not need system Python. If it cannot find an interpreter, it downloads
+a standalone Python into its managed data directory (by default,
+`~/.local/share/uv/python`). This does not replace system Python or add Python
+to your `PATH`. To use a conda interpreter instead, activate that conda
+environment first, then run `uv venv --python "$(which python)"` instead of
+`uv venv`.
+
+After installing, run without activating `.venv` with
+`uv run --no-project python fieldwork_server.py` from the repo root.
+
+**Option B: classic `venv` and `pip`**
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+With either option, install the bundled Chromium fallback from the active
+`.venv` if needed:
+
+```bash
+python -m playwright install chromium
 ```
 
 Note the `'mcp<2'` pin: MCP 2.x renamed `FastMCP` and broke the API this
@@ -16,14 +46,16 @@ API works without it.
 
 ## 2. Start the driver (1 min)
 
+With `.venv` active, run:
+
 ```bash
-python3 fieldwork_server.py
+python fieldwork_server.py
 ```
 
 Google Chrome opens on https://field-work-drawing.web.app/ by default, in a
 fresh browser context rather than your everyday Chrome profile. If Chrome is
 not installed, the server warns and falls back to Playwright Chromium. Choose
-Chromium explicitly with `python3 fieldwork_server.py --browser chromium`; the
+Chromium explicitly with `python fieldwork_server.py --browser chromium`; the
 visible-browser behavior is identical. The API comes up on
 `http://127.0.0.1:7766`. Check it:
 
@@ -67,7 +99,7 @@ Single strokes are for control. Whole drawings are stroke lists. Generate one
 with the bundled tracer on any photo:
 
 ```bash
-python3 draw_with_code.py trace --photo your_photo.jpg --out sketch.png
+python draw_with_code.py trace --photo your_photo.jpg --out sketch.png
 curl -X POST 127.0.0.1:7766/replay -H 'Content-Type: application/json' \
   -d @sketch.strokes.json
 ```
