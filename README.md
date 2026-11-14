@@ -104,6 +104,10 @@ curl -X POST 127.0.0.1:7766/replay -H 'Content-Type: application/json' -d @drawi
 # photo of the model -> ink sketch strokes -> real platform
 python3 draw_with_code.py trace --photo sample-pose.jpg --out pose_sketch.png
 curl -X POST 127.0.0.1:7766/replay -H 'Content-Type: application/json' -d @pose_sketch.strokes.json
+
+# or pick a curated artist style (gesture, ink-wash, stipple, blueprint,
+# swarm, field-notes) - one flag bundles tool, ink, preset and density knobs
+python3 draw_with_code.py trace --photo sample-pose.jpg --style blueprint --live
 ```
 
 Add `"pace_ms": 30` to the replay body to watch it draw at human speed.
@@ -135,7 +139,8 @@ wifi and it keeps working offline; the driver only needs localhost.
   strokes); both also write `.strokes.json` for replay, and trace can draw
   straight onto the live app with `--live`. `--tool paint|boids`, `--opacity`
   and `--preset breathing|nervous|...` put the platform's Paint stamps, Boids
-  flocks and living system presets into the stroke file
+  flocks and living system presets into the stroke file, and `--style` bundles
+  a whole tuned look (six artist styles) behind one flag
 - `replicate.py` - reference-image replication pipeline (the benchmark above)
 - `sample-pose.jpg` - free sample photo (Pexels) so trace mode works out of
   the box - see Credits
