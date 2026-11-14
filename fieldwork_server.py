@@ -1,9 +1,12 @@
+
 #!/usr/bin/env python3
 """
 fieldwork_server.py - drive https://field-work-drawing.web.app/ programmatically.
 
-Launches a real browser (Playwright Chromium), loads the field:work drawing
-app, and exposes a small local HTTP API. Every stroke is executed as genuine
+Launches Google Chrome by default, falling back to Playwright Chromium if Chrome
+is not installed. Both run in a fresh browser context, not your everyday Chrome
+profile. The driver loads the field:work drawing app and exposes a small local
+HTTP API. Every stroke is executed as genuine
 trusted pointer input on the app's canvas - the app cannot tell it apart from
 a mouse, so everything (Draw / Paint / Boids / Erase, the living "system"
 presets, PNG export, video recording) behaves exactly as for a human.
@@ -12,10 +15,11 @@ Why this shape: the app is a closed p5.js instance-mode bundle with no API,
 no import/export and no console hooks (checked its index.html + js/*.js), so
 the honest way in is through the front door: real input events.
 
-Setup (macOS):
+Setup:
   pip install playwright
-  python3 -m playwright install chromium
-  python3 fieldwork_server.py                # visible browser, port 7766
+  python3 -m playwright install chromium     # fallback / optional explicit choice
+  python3 fieldwork_server.py                # Chrome by default; port 7766
+  python3 fieldwork_server.py --browser chromium  # use bundled Chromium
   python3 fieldwork_server.py --headless     # no window (for testing)
 
 Then:
@@ -51,12 +55,13 @@ API summary:
 import argparse
 import json
 import queue
+import sys
 import threading
 import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import Error as PlaywrightError, sync_playwright
 
 APP_URL = "https://field-work-drawing.web.app/"
 
@@ -121,9 +126,11 @@ class BrowserDriver:
     """Owns the browser. All page calls run on one worker thread (Playwright
     sync API is single-threaded); HTTP handlers submit jobs to it."""
 
-    def __init__(self, headless=False, url=APP_URL):
+    def __init__(self, headless=False, url=APP_URL, browser="chrome"):
         self.url = url
         self.headless = headless
+        self.browser_choice = browser
+        self.browser_label = None
         self.jobs = queue.Queue()
         self.ready = threading.Event()
         self.error = None
@@ -136,7 +143,31 @@ class BrowserDriver:
     def _worker(self):
         try:
             self._pw = sync_playwright().start()
-            self.browser = self._pw.chromium.launch(headless=self.headless)
+            if self.browser_choice == "chrome":
+                try:
+                    self.browser = self._pw.chromium.launch(
+                        channel="chrome", headless=self.headless)
+                    self.browser_label = "Google Chrome"
+                except PlaywrightError as exc:
+                    message = str(exc).lower()
+                    chrome_missing = any(marker in message for marker in (
+                        "not found at", "executable doesn't exist",
+                        "executable does not exist",
+                    ))
+                    if not chrome_missing:
+                        raise
+                    print(
+                        "WARNING: Google Chrome was not found; falling back to "
+                        "Playwright Chromium. Install Chrome or run "
+                        "`python3 -m playwright install chromium`.",
+                        file=sys.stderr,
+                    )
+                    self.browser = self._pw.chromium.launch(
+                        headless=self.headless)
+                    self.browser_label = "Playwright Chromium (fallback)"
+            else:
+                self.browser = self._pw.chromium.launch(headless=self.headless)
+                self.browser_label = "Playwright Chromium"
             self.context = self.browser.new_context(
                 viewport={"width": 1440, "height": 960},
                 device_scale_factor=1,
@@ -521,11 +552,17 @@ def main():
     ap = argparse.ArgumentParser(description="HTTP driver for field-work-drawing.web.app")
     ap.add_argument("--port", type=int, default=7766)
     ap.add_argument("--headless", action="store_true")
+    ap.add_argument(
+        "--browser", choices=("chrome", "chromium"), default="chrome",
+        help=("Browser to launch (default: installed Google Chrome; falls back "
+              "to bundled Chromium if Chrome is missing)"),
+    )
     ap.add_argument("--url", default=APP_URL)
     args = ap.parse_args()
 
-    DRIVER = BrowserDriver(headless=args.headless, url=args.url)
-    print(f"field:work app loaded ({args.url})")
+    DRIVER = BrowserDriver(headless=args.headless, url=args.url,
+                           browser=args.browser)
+    print(f"field:work app loaded ({args.url}) in {DRIVER.browser_label}")
     print(f"API on http://127.0.0.1:{args.port}  -  endpoints in the module docstring")
     ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
 
