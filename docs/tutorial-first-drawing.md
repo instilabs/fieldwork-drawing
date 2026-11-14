@@ -105,8 +105,9 @@ curl -X POST 127.0.0.1:7766/replay -H 'Content-Type: application/json' \
 ```
 
 `/replay` scales the list from its source resolution into the current page
-format and executes every stroke as a gesture: about 700 strokes/sec flat
-out, or add `"pace_ms": 30` to the body to watch it draw at human speed.
+format and executes every stroke as a gesture: a full 7,000-stroke
+drawing lands in seconds (the app's own renderer is the floor), or add
+`"pace_ms": 30` to the body to watch it draw at human speed.
 
 Prefer to skip the server? Trace can drive the app directly:
 
@@ -145,3 +146,5 @@ curl -X POST 127.0.0.1:7766/clear -d '{}'
 - [HTTP API reference](reference-http-api.md) for every endpoint
 - [How the driver works](explanation-how-it-works.md) for what is really
   happening, and the honest limits
+- [Features, end to end](reference-features.md) for the full map of
+  modes, flags, endpoints and caveats
