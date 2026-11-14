@@ -148,6 +148,111 @@ SYSTEM_PRESETS = ("held", "breathing", "restless", "wandering",
                   "nervous", "melting", "frozen", "custom")
 BOID_PRESETS = ("stream", "drizzle", "crowd", "crawl", "rush",
                 "scatter", "custom")
+# A whole replay, run inside the page: per-group settings diffs plus batched
+# synthetic PointerEvents, one page.evaluate per chunk. Settings changes and
+# event dispatch cost microseconds in JS, so a multi-thousand-stroke replay
+# no longer pays a browser round trip per stroke (that path managed ~28
+# strokes/sec when every stroke had its own settings; this does thousands).
+#
+# Synthetic events work because the app does not check isTrusted and it
+# catches setPointerCapture failure, so they are equivalent to real input.
+# Controls are the app's own DOM inputs: el.click() and input events go
+# through its normal change handling, same as the preset chips always have.
+# Strokes arrive in page units and are mapped to screen pixels with the
+# app's own live view transform (window.__fwtf, hooked at startup), re-read
+# every 200 strokes so a mid-replay resize still lands correctly.
+REPLAY_JS = r"""
+async (args) => {
+  const live = document.getElementById('live');
+  const canvas = document.querySelector('#frame canvas');
+  if (!live || !canvas) throw new Error('app canvas not found - is it loaded?');
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const norm = (s) => (s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const clickText = (scopeSel, text) => {
+    const root = document.querySelector(scopeSel);
+    if (!root) throw new Error('no element matching ' + scopeSel);
+    const want = norm(text);
+    const btn = [...root.querySelectorAll('button')].find(
+      (b) => norm(b.textContent) === want);
+    if (!btn) throw new Error('no button "' + text + '" inside ' + scopeSel);
+    btn.click();
+  };
+  const clickChoice = (attr, value) => {
+    const el = document.querySelector('[data-' + attr + '="' + value + '"]');
+    if (!el) throw new Error('no [data-' + attr + '="' + value + '"]');
+    el.click();
+  };
+  const setControl = (cid, value) => {
+    const el = document.getElementById(cid);
+    if (!el) throw new Error('no control #' + cid);
+    el.value = value;
+    el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input',
+      { bubbles: true }));
+  };
+  // Same order as the old per-group Python sweep: preset, then tool, then
+  // the tool's own options, then brush. `settings` is a diff against the
+  // previous group; missing/null keys leave that control as it is.
+  const applySettings = (st, tool) => {
+    if (st.preset) clickText('#new-lines', st.preset);
+    if (st.tool) clickChoice('tool', tool);
+    if (tool === 'paint' && st.shape) clickChoice('shape', st.shape);
+    if (tool === 'boids') {
+      if (st.boid_preset) clickText('#boid-options', st.boid_preset);
+      if (st.shape) clickChoice('boid-shape', st.shape);
+      for (const pair of [['boid_heading', 'boid-heading'],
+                          ['boid_speed', 'boid-speed'],
+                          ['boid_curl', 'boid-curl'],
+                          ['boid_variety', 'boid-variety'],
+                          ['boid_density', 'boid-density']]) {
+        if (st[pair[0]] != null) setControl(pair[1], st[pair[0]]);
+      }
+    }
+    if (tool === 'erase') {
+      if (st.eraser_size != null)
+        setControl('eraser-size',
+                   Math.max(4, Math.min(200, Math.round(st.eraser_size))));
+    } else if (st.size != null) {
+      setControl('size', Math.max(1, Math.min(60, Math.round(st.size))));
+    }
+    if (st.ink != null) setControl('ink', st.ink);
+    if (st.opacity != null)
+      setControl('opacity', Math.max(0.05, Math.min(1, st.opacity)));
+  };
+  const readTf = () => {
+    const m = window.__fwtf;
+    if (!m) throw new Error('no transform captured - is the app loaded?');
+    const r = canvas.getBoundingClientRect();
+    return { a: m.a, d: m.d, e: m.e, f: m.f,
+             left: r.left, top: r.top, dpr: canvas.width / r.width };
+  };
+  let tf = readTf();
+  const opts = (x, y, extra) => Object.assign({
+    pointerId: 1, pointerType: 'mouse', isPrimary: true,
+    clientX: x, clientY: y, bubbles: true, cancelable: true,
+    button: 0, buttons: 1, pressure: 0.5,
+  }, extra || {});
+  let done = 0;
+  for (const g of args.groups) {
+    applySettings(g.settings, g.tool);
+    for (const pts of g.strokes) {
+      if (!pts.length) continue;
+      if (done % 200 === 0) tf = readTf();
+      const X = (i) => tf.left + (tf.a * pts[i][0] + tf.e) / tf.dpr;
+      const Y = (i) => tf.top + (tf.d * pts[i][1] + tf.f) / tf.dpr;
+      live.dispatchEvent(new PointerEvent('pointerdown', opts(X(0), Y(0))));
+      for (let i = 1; i < pts.length; i++)
+        live.dispatchEvent(new PointerEvent('pointermove', opts(X(i), Y(i))));
+      live.dispatchEvent(new PointerEvent('pointerup',
+        opts(X(pts.length - 1), Y(pts.length - 1), { buttons: 0 })));
+      done++;
+      if (args.pace_ms) await sleep(args.pace_ms);
+      else if (done % 50 === 0) await sleep(0);  // let the 15fps renderer breathe
+    }
+  }
+  return done;
+}
+"""
+
 
 
 class BrowserDriver:
@@ -300,89 +405,6 @@ class BrowserDriver:
                              f"one of: {', '.join(BOID_PRESETS)}")
         return self.click_text("#boid-options", name)
 
-    def apply_stroke_settings(self, st):
-        """Point the app's controls at one stroke group's settings. Every
-        key is optional; missing keys leave that control as it is. Order:
-        preset, then tool, then the tool's own options, then brush."""
-        if st.get("preset"):
-            self.set_system_preset(st["preset"])
-        tool = st.get("tool")
-        if tool:
-            self.click_choice("tool", tool)
-        if tool == "paint" and st.get("shape"):
-            self.click_choice("shape", st["shape"])
-        if tool == "boids":
-            if st.get("boid_preset"):
-                self.set_boid_preset(st["boid_preset"])
-            if st.get("shape"):
-                self.click_choice("boid-shape", st["shape"])
-            for key, cid in (("boid_heading", "boid-heading"),
-                             ("boid_speed", "boid-speed"),
-                             ("boid_curl", "boid-curl"),
-                             ("boid_variety", "boid-variety"),
-                             ("boid_density", "boid-density")):
-                if st.get(key) is not None:
-                    self.set_control(cid, st[key])
-        if tool == "erase":
-            if st.get("eraser_size") is not None:
-                self.set_control("eraser-size",
-                                 max(4, min(200, round(st["eraser_size"]))))
-        elif st.get("size") is not None:
-            self.set_control("size", max(1, min(60, round(st["size"]))))
-        if st.get("ink") is not None:
-            self.set_control("ink", st["ink"])
-        if st.get("opacity") is not None:
-            self.set_control("opacity", max(0.05, min(1, st["opacity"])))
-
-    # Batched synthetic PointerEvents dispatched at the #live overlay (the
-    # element js/input.js listens on). The app does not check isTrusted, and
-    # setPointerCapture failure is caught by the app, so this is equivalent
-    # to real input - and hundreds of times faster than CDP mouse calls,
-    # which is what makes multi-thousand-stroke replays practical.
-    DISPATCH_JS = """
-    async (args) => {
-      const el = document.getElementById('live');
-      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-      const opts = (x, y, extra) => Object.assign({
-        pointerId: 1, pointerType: 'mouse', isPrimary: true,
-        clientX: x, clientY: y, bubbles: true, cancelable: true,
-        button: 0, buttons: 1, pressure: 0.5,
-      }, extra || {});
-      let done = 0;
-      for (const pts of args.strokes) {
-        if (!pts.length) continue;
-        el.dispatchEvent(new PointerEvent('pointerdown', opts(pts[0][0], pts[0][1])));
-        for (let i = 1; i < pts.length; i++) {
-          el.dispatchEvent(new PointerEvent('pointermove', opts(pts[i][0], pts[i][1])));
-        }
-        const last = pts[pts.length - 1];
-        el.dispatchEvent(new PointerEvent('pointerup', opts(last[0], last[1], { buttons: 0 })));
-        done++;
-        if (args.pace_ms) await sleep(args.pace_ms);
-        else if (done % 50 === 0) await sleep(0);  // let the 15fps renderer breathe
-      }
-      return done;
-    }
-    """
-
-    def gestures_batch(self, strokes_screen, pace_ms=0, chunk=500):
-        """ strokes_screen: list of strokes, each a list of [screenX, screenY]. """
-        done = 0
-        for i in range(0, len(strokes_screen), chunk):
-            part = strokes_screen[i:i + chunk]
-            done += self.page.evaluate(
-                self.DISPATCH_JS, {"strokes": part, "pace_ms": pace_ms})
-        return done
-
-    def page_points_to_screen(self, pts):
-        m = self._tf()
-        dpr = m["canvasW"] / m["rect"]["width"]
-        return [
-            [m["rect"]["left"] + (m["tf"]["a"] * x + m["tf"]["e"]) / dpr,
-             m["rect"]["top"] + (m["tf"]["d"] * y + m["tf"]["f"]) / dpr]
-            for x, y in pts
-        ]
-
     def gesture(self, points, pace_ms=0):
         """One pointer gesture through page-unit points, as a real mouse."""
         if len(points) < 1:
@@ -507,10 +529,12 @@ def act_replay(d, strokes, source_size=None, clear_first=False, pace_ms=6,
         t0 = time.time()
         if preset:
             d.set_system_preset(preset)
-        # group consecutive strokes by their full technique settings (tool,
-        # preset, shape, ink, size, opacity, boid params) so control changes
-        # (DOM round trips) happen once per group, then batch-dispatch each
-        # group as synthetic pointer events in one page.evaluate call.
+        # Group consecutive strokes by their full technique settings (tool,
+        # preset, shape, ink, size, opacity, boid params), then hand the
+        # groups to REPLAY_JS: one page.evaluate per chunk applies each
+        # group's settings diff and dispatches its strokes as synthetic
+        # pointer events, so the whole replay costs a handful of browser
+        # round trips instead of several per stroke.
         work = strokes[: max_strokes or len(strokes)]
         groups = []
         for s in work:
@@ -539,10 +563,44 @@ def act_replay(d, strokes, source_size=None, clear_first=False, pace_ms=6,
                 groups[-1][2].append(pts)
             else:
                 groups.append((key, st, [pts]))
+        # Settings go to the page as diffs against the previous group - only
+        # what actually changed gets pushed. A tool switch sends the full
+        # settings so tool-scoped options (shape, boid params) reapply.
+        payloads = []
+        prev = None
         for key, st, group in groups:
-            d.apply_stroke_settings(st)
-            batch = [d.page_points_to_screen(pts) for pts in group]
-            n += d.gestures_batch(batch, pace_ms=pace_ms)
+            if prev is None or st["tool"] != prev["tool"]:
+                diff = dict(st)
+            else:
+                diff = {k: v for k, v in st.items()
+                        if k != "tool" and prev[k] != v}
+            payloads.append({"tool": st["tool"], "settings": diff,
+                             "strokes": group})
+            prev = st
+        # Split oversized groups and pack pieces into chunks bounded by
+        # estimated in-page time: at pace_ms=0 a chunk is pure dispatch
+        # (~1ms/stroke); paced replays get ~8s of sleep per chunk so one
+        # evaluate never runs long enough to risk a dropped connection.
+        budget = 4000 if pace_ms <= 0 else max(50, min(2000, int(8000 / pace_ms)))
+        pieces = []
+        for p in payloads:
+            sl = p["strokes"]
+            first = True
+            for i in range(0, len(sl), budget):
+                pieces.append({"tool": p["tool"],
+                               "settings": p["settings"] if first else {},
+                               "strokes": sl[i:i + budget]})
+                first = False
+        chunk, chunk_n = [], 0
+        for piece in pieces:
+            if chunk and chunk_n + len(piece["strokes"]) > budget:
+                n += d.page.evaluate(
+                    REPLAY_JS, {"groups": chunk, "pace_ms": pace_ms})
+                chunk, chunk_n = [], 0
+            chunk.append(piece)
+            chunk_n += len(piece["strokes"])
+        if chunk:
+            n += d.page.evaluate(REPLAY_JS, {"groups": chunk, "pace_ms": pace_ms})
         return {"replayed": n, "seconds": round(time.time() - t0, 1),
                 "page": [pw, ph], "scale": round(scale, 4)}
     return d.call(go)
