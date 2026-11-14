@@ -460,6 +460,78 @@ def draw_mark(draw, brush, mark, length_px, color, width, rng):
 
 # ------------------------------------------------------------- mode: decide
 
+def _clip_decide_segment(p0, p1, width, height):
+    """Clip one recorded decide-mode segment to the export canvas."""
+    x0, y0 = p0
+    x1, y1 = p1
+    dx, dy = x1 - x0, y1 - y0
+    t0, t1 = 0.0, 1.0
+    for p, q in ((-dx, x0), (dx, width - x0),
+                 (-dy, y0), (dy, height - y0)):
+        if p == 0:
+            if q < 0:
+                return None
+            continue
+        r = q / p
+        if p < 0:
+            if r > t1:
+                return None
+            t0 = max(t0, r)
+        else:
+            if r < t0:
+                return None
+            t1 = min(t1, r)
+    a = [min(width, max(0.0, x0 + t0 * dx)),
+         min(height, max(0.0, y0 + t0 * dy))]
+    b = [min(width, max(0.0, x0 + t1 * dx)),
+         min(height, max(0.0, y0 + t1 * dy))]
+    return a, b, t0, t1
+
+
+def _format_decide_strokes(strokes, scale, ox, oy, width, height):
+    """Scale strokes into a formatted canvas and clip paths to its bounds."""
+    formatted = []
+    eps = 1e-7
+    for stroke in strokes:
+        pts = [[p[0] * scale + ox, p[1] * scale + oy]
+               for p in stroke["points"]]
+        groups = []
+        if len(pts) == 1:
+            x, y = pts[0]
+            if 0 <= x <= width and 0 <= y <= height:
+                groups.append([pts[0]])
+        else:
+            current = None
+            for p0, p1 in zip(pts, pts[1:]):
+                clipped = _clip_decide_segment(p0, p1, width, height)
+                if clipped is None:
+                    if current:
+                        groups.append(current)
+                        current = None
+                    continue
+                a, b, t0, t1 = clipped
+                if current and math.dist(current[-1], a) <= eps:
+                    if math.dist(current[-1], b) > eps:
+                        current.append(b)
+                else:
+                    if current:
+                        groups.append(current)
+                    current = [a]
+                    if math.dist(a, b) > eps:
+                        current.append(b)
+                if t1 < 1 - eps:
+                    groups.append(current)
+                    current = None
+            if current:
+                groups.append(current)
+        for group in groups:
+            item = dict(stroke)
+            item["points"] = group
+            item["width"] = max(0.5, stroke["width"] * scale)
+            formatted.append(item)
+    return formatted
+
+
 def run_decide(args):
     rng = random.Random(args.seed)
     W, H = args.size
@@ -528,7 +600,27 @@ def run_decide(args):
         if (step + 1) % args.save_every == 0 or step == args.steps - 1:
             img.resize((W, H), Image.LANCZOS).save(args.out)
 
-    strokes_path = save_strokes(rec, args.strokes, (W * SS, H * SS))
+    sw, sh = W, H
+    if args.format:
+        fw, fh = (int(x) for x in args.format.split(":"))
+        # canvas: the largest fw:fh rectangle that fits inside --size
+        if W / H > fw / fh:
+            ch_, cw_ = H, round(H * fw / fh)
+        else:
+            cw_, ch_ = W, round(W * fh / fw)
+        s = min(cw_ * SS / img.width, ch_ * SS / img.height)
+        dw, dh = max(1, round(img.width * s)), max(1, round(img.height * s))
+        ox, oy = (cw_ * SS - dw) // 2, (ch_ * SS - dh) // 2
+        canvas = Image.new("RGB", (cw_ * SS, ch_ * SS), PAPER)
+        canvas.paste(img.resize((dw, dh), Image.LANCZOS), (ox, oy))
+        img = canvas
+        rec.strokes = _format_decide_strokes(
+            rec.strokes, s, ox, oy, cw_ * SS, ch_ * SS)
+        sw, sh = cw_, ch_
+        print(f"format: letterboxed to {args.format} ({sw}x{sh})")
+
+    img.resize((sw, sh), Image.LANCZOS).save(args.out)
+    strokes_path = save_strokes(rec, args.strokes, (sw * SS, sh * SS))
     dt = time.time() - t0
     print(f"done: {args.steps} marks in {dt:.1f}s "
           f"({'ollaya /v1/systemone' if used_api else 'random fallback'}, "
@@ -843,9 +935,8 @@ def add_live_args(p, live_help):
                    help="live draw speed in strokes per second (default 30; "
                         "lower looks more hand-drawn, 0 = as fast as the app goes)")
     p.add_argument("--format", choices=APP_FORMATS, default=None,
-                   help="set the app's page format before drawing live "
-                        "(default: leave it as it is; the replay letterboxes "
-                        "into whatever format is showing)")
+                   help="letterbox the static export to this aspect; with "
+                        "--live also set the app's page format")
     p.add_argument("--clear", action="store_true",
                    help="clear the app canvas before drawing live")
     p.add_argument("--browser", choices=("chrome", "chromium"), default="chrome",
