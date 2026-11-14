@@ -8,8 +8,12 @@ console hooks. Its state lives in localStorage and its input lives on an
 overlay canvas element (`#live`) that listens for standard pointer events.
 
 So the only way in is the front door: be a hand. The driver opens the real
-app in Playwright Chromium and feeds it pointer gestures at canvas
-coordinates. Everything downstream (the living system presets, Paint stamps,
+app in installed Google Chrome by default and feeds it pointer gestures at
+canvas coordinates. If Chrome is missing, it warns and falls back to bundled
+Playwright Chromium; run `python3 -m playwright install chromium` to install
+that fallback, or select it directly with `--browser chromium`. Both options
+show the same visible app. Playwright creates a fresh browser context either
+way, not a connection to your everyday Chrome profile. Everything downstream (the living system presets, Paint stamps,
 Boids, PNG export, video recording) then behaves exactly as it does for a
 human, because as far as the app knows, this is a human.
 
