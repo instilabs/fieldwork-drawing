@@ -13,6 +13,10 @@ Two modes:
           strokes + shadow hatching. Point it at a photo of the model:
           python3 draw_with_code.py trace --photo model.jpg --out sketch.png
 
+          Add --live and trace skips the export-only path after writing the
+          PNG: it opens the real field:work app and draws the sketch on it,
+          stroke by stroke, at a watchable speed (--speed strokes/sec).
+
 Deps: pip install pillow numpy   (that's all)
 Tested output lands next to the script; open the PNG in Preview and it
 auto-refreshes as the drawing grows (decide saves every --save-every steps).
@@ -28,6 +32,7 @@ Examples:
   python3 draw_with_code.py decide --mood "calm seated pose, flowing ink" --steps 400
   python3 draw_with_code.py decide --model largha --steps 200 --seed 7
   python3 draw_with_code.py trace --photo pose.jpg --out pose_sketch.png
+  python3 draw_with_code.py trace --photo pose.jpg --live --speed 20
 """
 
 import argparse
@@ -121,6 +126,63 @@ def save_strokes(rec, path, size):
     with open(path, "w") as f:
         json.dump(payload, f)
     return path
+
+
+# ------------------------------------------------------------- live draw ---
+
+APP_FORMATS = ["1:1", "4:5", "5:4", "9:16", "16:9"]
+
+
+def draw_strokes_live(payload, speed=30.0, headless=False, browser="chrome",
+                      format=None, clear=False, on_chunk=None):
+    """Replay a stroke list onto the live field:work app, chunk by chunk, at
+    a watchable speed. payload is the shape save_strokes writes:
+    {"source_size": [w, h], "strokes": [...]}. The replay scales the list
+    into the app's current page format (or --format) and letterboxes when
+    the aspect ratios differ.
+
+    on_chunk, when given, is called after each ~1s chunk as
+    on_chunk(driver, strokes_done, strokes_total) - a hook for tests and
+    progress screenshots.
+    """
+    try:
+        from fieldwork_server import BrowserDriver, act_format, act_replay
+    except ImportError as e:
+        sys.exit(f"--live needs Playwright and fieldwork_server.py next to "
+                 f"this script ({e}). Set up with:\n"
+                 f"  pip install playwright\n"
+                 f"  python3 -m playwright install chromium   # Chrome fallback")
+    d = BrowserDriver(headless=headless, browser=browser)
+    try:
+        if format:
+            act_format(d, format)
+        strokes = payload["strokes"]
+        pace_ms = max(0, int(round(1000.0 / speed))) if speed > 0 else 0
+        chunk = max(1, int(round(speed)))  # ~1s of drawing per replay call
+        total = len(strokes)
+        done = 0
+        t0 = time.time()
+        r = None
+        for i in range(0, total, chunk):
+            r = act_replay(d, strokes[i:i + chunk],
+                           source_size=payload.get("source_size"),
+                           clear_first=clear and i == 0, pace_ms=pace_ms)
+            done += r["replayed"]
+            print(f"  live: {done}/{total} strokes", flush=True)
+            if on_chunk:
+                on_chunk(d, done, total)
+        dt = time.time() - t0
+        print(f"live draw done: {done} strokes in {dt:.1f}s on {d.url} "
+              f"(page {r['page'][0]}x{r['page'][1]}, scale {r['scale']})")
+        if not headless and sys.stdin.isatty():
+            input("press Enter to close the browser...")
+    finally:
+        # the browser lives on the driver's worker thread; close it there
+        try:
+            d.call(lambda dd: dd.browser.close())
+        except Exception:
+            pass
+        d.jobs.put(None)
 
 # ---------------------------------------------------------------- ollaya ---
 
@@ -427,6 +489,12 @@ def run_trace(args):
     print(f"done: traced {args.photo} -> {args.out} + {strokes_path} "
           f"({placed} contour strokes + hatching, {len(rec.strokes)} total)")
 
+    if args.live:
+        draw_strokes_live(
+            {"source_size": [sw * SS, sh * SS], "strokes": rec.strokes},
+            speed=args.speed, headless=args.headless, browser=args.browser,
+            format=args.format, clear=args.clear)
+
 
 # ------------------------------------------------------------------- cli ---
 
@@ -470,6 +538,23 @@ def main():
     t.add_argument("--seed", type=int, default=None)
     t.add_argument("--strokes", default=None,
                    help="stroke-list JSON for replay (default: <out>.strokes.json)")
+    t.add_argument("--live", action="store_true",
+                   help="after tracing, draw the sketch on the live app "
+                        "(field-work-drawing.web.app) in a browser window")
+    t.add_argument("--speed", type=float, default=30.0,
+                   help="live draw speed in strokes per second (default 30; "
+                        "lower looks more hand-drawn, 0 = as fast as the app goes)")
+    t.add_argument("--format", choices=APP_FORMATS, default=None,
+                   help="set the app's page format before drawing live "
+                        "(default: leave it as it is; the replay letterboxes "
+                        "into whatever format is showing)")
+    t.add_argument("--clear", action="store_true",
+                   help="clear the app canvas before drawing live")
+    t.add_argument("--browser", choices=("chrome", "chromium"), default="chrome",
+                   help="browser for --live (default: installed Google Chrome, "
+                        "falling back to bundled Chromium)")
+    t.add_argument("--headless", action="store_true",
+                   help="--live without a visible window (for testing)")
     t.set_defaults(fn=run_trace)
 
     args = ap.parse_args()
